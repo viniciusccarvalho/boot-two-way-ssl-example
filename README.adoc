@@ -1,0 +1,112 @@
+=== Spring Boot Client authentication demo
+
+
+
+==== Generate the Client & Server certificates
+Note that when using Tomcat as the embedded servlet container, you can't have the keystore file
+inside your jar/war, they need to be on the filesystem. If you want to run this example using tomcat
+copy the server.jks to a folder and reference that folder instead of `classpath:server.jks`
+
+
+From the project root:
+
+`keytool -genkeypair -alias serverkey -keyalg RSA -dname "CN=Server,OU=Spring team,O=Pivotal,L=Ave of Americas,S=NY,C=US" -keypass s3cr3t -keystore server.jks -storepass s3cr3t`
+`keytool -genkeypair -alias clientkey -keyalg RSA -dname "CN=Client,OU=Spring team,O=Pivotal,L=Ave of Americas,S=NY,C=US" -keypass s3cr3t -keystore client.jks -storepass s3cr3t`
+
+==== Export Client and server certificates
+
+`keytool -exportcert -alias clientkey -file client-public.cer -keystore client.jks -storepass s3cr3t`
+`keytool -exportcert -alias serverkey -file server-public.cer -keystore server.jks -storepass s3cr3t`
+
+==== Import client certificate onto server keystore (and vice versa)
+
+`keytool -importcert -keystore server.jks -alias clientcert -file client-public.cer -storepass s3cr3t -noprompt`
+`keytool -importcert -keystore client.jks -alias servercert -file server-public.cer -storepass s3cr3t -noprompt`
+
+You now have two keystore files, one for the server with a client cert, and one for the client
+with a server cert.
+
+During the authentication using client certs, the client send its certificate to the server that needs
+to have it on its keystore to accept the connection. The client needs the server cert because we are using
+self signed certs and the http client would not accept a certificate that was not signed by a known CA.
+
+Now copy the server.jks file to `server/src/main/resources`
+
+and client.jks to `client/src/main/resources`
+
+=== Server side
+
+==== Update application.yml
+
+[source, yaml]
+----
+server:
+  ssl:
+    "key-store" : 'classpath:server.jks'
+    "key-store-password" : s3cr3t
+    "key-password" : s3cr3t
+    "trust-store" : 'classpath:server.jks'
+    "trust-store-password" : s3cr3t
+    "client-auth" : "need"
+----
+
+=== Client side
+
+On the client side, we need to enable our custom keystore and trustsore. Make sure you replace the
+
+`$CLIENT_JKS_LOCATION` just make sure to replace that with the location of the JKS file on your system.
+
+
+[source,java]
+
+----
+
+/**
+ * @author Vinicius Carvalho
+ */
+@SpringBootApplication
+public class ClientAuthApplication {
+
+	final static String KEYSTORE_PASSWORD = "s3cr3t";
+
+	static
+	{
+		System.setProperty("javax.net.ssl.trustStore", $CLIENT_JKS_LOCATION);
+		System.setProperty("javax.net.ssl.trustStorePassword", KEYSTORE_PASSWORD);
+		System.setProperty("javax.net.ssl.keyStore",  $CLIENT_JKS_LOCATION);
+		System.setProperty("javax.net.ssl.keyStorePassword", KEYSTORE_PASSWORD);
+
+		javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
+				new javax.net.ssl.HostnameVerifier() {
+
+					public boolean verify(String hostname,
+							javax.net.ssl.SSLSession sslSession) {
+						if (hostname.equals("localhost")) {
+							return true;
+						}
+						return false;
+					}
+				});
+	}
+
+	@Bean
+	public RestTemplate template() throws Exception{
+		RestTemplate template = new RestTemplate();
+		return template;
+	}
+
+	public static void main(String[] args) {
+		SpringApplication.run(ClientAuthApplication.class,args);
+	}
+
+}
+----
+
+The client is a Spring Boot app that accepts one argument which is the path you want to perform a `GET` operation.
+
+For example:
+
+`java -jar build/libs/clientauth-0.0.1-SNAPSHOT.jar https://localhost:8080/env`
+
+Note that this endpoint if you try to access from your browser or curl it, you will not be able to
+access as it requires a client certificate.
