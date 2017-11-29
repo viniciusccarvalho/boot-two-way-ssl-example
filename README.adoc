@@ -11,16 +11,19 @@ copy the server.jks to a folder and reference that folder instead of `classpath:
 From the project root:
 
 `keytool -genkeypair -alias serverkey -keyalg RSA -dname "CN=Server,OU=Spring team,O=Pivotal,L=Ave of Americas,S=NY,C=US" -keypass s3cr3t -keystore server.jks -storepass s3cr3t`
+
 `keytool -genkeypair -alias clientkey -keyalg RSA -dname "CN=Client,OU=Spring team,O=Pivotal,L=Ave of Americas,S=NY,C=US" -keypass s3cr3t -keystore client.jks -storepass s3cr3t`
 
 ==== Export Client and server certificates
 
 `keytool -exportcert -alias clientkey -file client-public.cer -keystore client.jks -storepass s3cr3t`
+
 `keytool -exportcert -alias serverkey -file server-public.cer -keystore server.jks -storepass s3cr3t`
 
 ==== Import client certificate onto server keystore (and vice versa)
 
 `keytool -importcert -keystore server.jks -alias clientcert -file client-public.cer -storepass s3cr3t -noprompt`
+
 `keytool -importcert -keystore client.jks -alias servercert -file server-public.cer -storepass s3cr3t -noprompt`
 
 You now have two keystore files, one for the server with a client cert, and one for the client
